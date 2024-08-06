@@ -1,24 +1,35 @@
+from collections.abc import Callable
+
 import numpy as np
 from scipy import interpolate
 
-
-# Nitrogen based cooling curve used in Lipschultz 2016
-def LfuncN(T):
-    answer = 0
-    if T >= 1 and T <= 80:
-        answer = 5.9e-34 * (T - 1) ** (0.5)
-        answer = answer * (80 - T)
-        answer = answer / (1 + (3.1e-3) * (T - 1) ** 2)
-    else:
-        answer = 0
-    return answer
+from .typing import PathLike
 
 
-# Ne based cooling curve produced by Matlab polynominal curve fitting "polyval" (Ryoko 2020 Nov)
-def LfuncNe(T):
-    answer = 0
-    if T >= 3 and T <= 100:
-        answer = (
+def LfuncN(T: float) -> float:
+    """Nitrogen based cooling curve used in Lipschultz 2016
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+    if 1 <= T <= 80:
+        return (5.9e-34 * np.sqrt(T - 1)) * (80 - T) / (1 + (3.1e-3) * (T - 1) ** 2)
+
+    return 0
+
+
+def LfuncNe(T: float) -> float:
+    """Ne based cooling curve produced by Matlab polynominal curve fitting "polyval" (Ryoko 2020 Nov)
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+    if 3 <= T <= 100:
+        return (
             -2.0385e-40 * T**5
             + 5.4824e-38 * T**4
             - 5.1190e-36 * T**3
@@ -26,20 +37,25 @@ def LfuncNe(T):
             - 3.4151e-34 * T
             - 3.2798e-34
         )
-    elif T >= 2 and T < 3:
-        answer = (8.0 - 1.0) * 1.0e-35 / (3.0 - 2.0) * (T - 2.0) + 1.0e-35
-    elif T >= 1 and T < 2:
-        answer = 1.0e-35 / (2.0 - 1.0) * (T - 1.0)
-    else:
-        answer = 0
-    return answer
+    if 2 <= T < 3:
+        return (8.0 - 1.0) * 1.0e-35 / (3.0 - 2.0) * (T - 2.0) + 1.0e-35
+
+    if 1 <= T < 2:
+        return 1.0e-35 / (2.0 - 1.0) * (T - 1.0)
+
+    return 0
 
 
-# Ar based cooling curve produced by Matlab polynominal curve fitting "polyval" (Ryoko 2020 Nov)
-def LfuncAr(T):
-    answer = 0
-    if T >= 1.5 and T <= 100:
-        answer = (
+def LfuncAr(T: float) -> float:
+    """Ar based cooling curve produced by Matlab polynominal curve fitting "polyval" (Ryoko 2020 Nov)
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+    if 1.5 <= T <= 100:
+        return (
             -4.9692e-48 * T**10
             + 2.8025e-45 * T**9
             - 6.7148e-43 * T**8
@@ -52,16 +68,22 @@ def LfuncAr(T):
             + 4.9864e-34 * T
             - 9.9412e-34
         )
-    elif T >= 1.0 and T < 1.5:
-        answer = 2.5e-35 / (1.5 - 1.0) * (T - 1.0)
-    else:
-        answer = 0
-    return answer
+    if 1.0 <= T < 1.5:
+        return 2.5e-35 / (1.5 - 1.0) * (T - 1.0)
+
+    return 0
 
 
-def LfuncKallenbachN(T):
-    # Nitrogen, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
-    if T >= 1 and T < 5:
+def LfuncKallenbachN(T: float) -> float:
+    """Nitrogen, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+
+    if 1 <= T < 5:
         Lz = np.poly1d(
             [
                 -5.21687120e-36,
@@ -78,7 +100,7 @@ def LfuncKallenbachN(T):
             ]
         )(T)
 
-    elif T > 5 and T < 40:
+    elif 5 <= T < 40:
         Lz = np.poly1d(
             [
                 3.26756633e-44,
@@ -95,7 +117,7 @@ def LfuncKallenbachN(T):
             ]
         )(T)
 
-    elif T > 40 and T < 300:
+    elif 40 <= T < 300:
         Lz = np.poly1d(
             [
                 7.54004096e-54,
@@ -111,24 +133,22 @@ def LfuncKallenbachN(T):
                 9.64688241e-32,
             ]
         )(T)
-
-    elif T > 300:
-        Lz = 0
-    elif T < 1:
+    else:
         Lz = 0
 
-    try:
-        Lz = abs(Lz)
-    except:
-        # print("Curve failed, T = {}".format(T))
-        Lz = 0
-
-    return Lz
+    return np.abs(Lz)
 
 
-def LfuncKallenbachAr(T):
-    # Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
-    if T >= 1 and T < 5:
+def LfuncKallenbachAr(T: float) -> float:
+    """Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+
+    if 1 <= T < 5:
         Lz = np.poly1d(
             [
                 -8.38699251e-36,
@@ -145,7 +165,7 @@ def LfuncKallenbachAr(T):
             ]
         )(T)
 
-    elif T > 5 and T < 40:
+    elif 5 <= T < 40:
         Lz = np.poly1d(
             [
                 -2.24776575e-44,
@@ -162,7 +182,7 @@ def LfuncKallenbachAr(T):
             ]
         )(T)
 
-    elif T > 40 and T < 300:
+    elif 40 <= T < 300:
         Lz = np.poly1d(
             [
                 1.15288779e-52,
@@ -179,23 +199,22 @@ def LfuncKallenbachAr(T):
             ]
         )(T)
 
-    elif T > 300:
-        Lz = 0
-    elif T < 1:
+    else:
         Lz = 0
 
-    try:
-        Lz = abs(Lz)
-    except:
-        # print("Curve failed, T = {}".format(T))
-        Lz = 0
-
-    return Lz
+    return np.abs(Lz)
 
 
-def LfuncKallenbachAr100B(T):
-    # Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
-    if T >= 1 and T < 5:
+def LfuncKallenbachAr100B(T: float) -> float:
+    """Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+
+    if 1 <= T < 5:
         Lz = np.poly1d(
             [
                 -8.38699251e-36,
@@ -212,7 +231,7 @@ def LfuncKallenbachAr100B(T):
             ]
         )(T)
 
-    elif T > 5 and T < 40:
+    elif 5 <= T < 40:
         Lz = np.poly1d(
             [
                 -2.24776575e-44,
@@ -229,7 +248,7 @@ def LfuncKallenbachAr100B(T):
             ]
         )(T)
 
-    elif T > 40 and T < 300:
+    elif 40 <= T < 100:
         Lz = np.poly1d(
             [
                 1.15288779e-52,
@@ -247,7 +266,7 @@ def LfuncKallenbachAr100B(T):
         )(T)
 
     # After 100 it's constant radiation (but not 0)
-    if T > 100:
+    elif 100 <= T < 300:
         Lz = np.poly1d(
             [
                 1.15288779e-52,
@@ -263,23 +282,24 @@ def LfuncKallenbachAr100B(T):
                 1.65113630e-30,
             ]
         )(100)
-    if T > 300:
+    elif T >= 300:
         Lz = 300
-    if T < 1:
+    else:
         Lz = 0
 
-    try:
-        Lz = abs(Lz)
-    except:
-        # print("Curve failed, T = {}".format(T))
-        Lz = 0
-
-    return Lz
+    return np.abs(Lz)
 
 
-def LfuncKallenbachAr200(T):
-    # Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
-    if T >= 1 and T < 5:
+def LfuncKallenbachAr200(T: float) -> float:
+    """Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+
+    if 1 <= T < 5:
         Lz = np.poly1d(
             [
                 -8.38699251e-36,
@@ -296,7 +316,7 @@ def LfuncKallenbachAr200(T):
             ]
         )(T)
 
-    elif T > 5 and T < 40:
+    elif 5 <= T < 40:
         Lz = np.poly1d(
             [
                 -2.24776575e-44,
@@ -313,7 +333,7 @@ def LfuncKallenbachAr200(T):
             ]
         )(T)
 
-    elif T > 40 and T < 200:
+    elif 40 <= T < 200:
         Lz = np.poly1d(
             [
                 1.15288779e-52,
@@ -330,23 +350,22 @@ def LfuncKallenbachAr200(T):
             ]
         )(T)
 
-    elif T > 200:
-        Lz = 0
-    elif T < 1:
+    else:
         Lz = 0
 
-    try:
-        Lz = abs(Lz)
-    except:
-        # print("Curve failed, T = {}".format(T))
-        Lz = 0
-
-    return Lz
+    return np.abs(Lz)
 
 
-def LfuncKallenbachAr100(T):
-    # Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
-    if T >= 1 and T < 5:
+def LfuncKallenbachAr100(T: float) -> float:
+    """Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+
+    if 1 <= T < 5:
         Lz = np.poly1d(
             [
                 -8.38699251e-36,
@@ -363,7 +382,7 @@ def LfuncKallenbachAr100(T):
             ]
         )(T)
 
-    elif T > 5 and T < 40:
+    elif 5 <= T < 40:
         Lz = np.poly1d(
             [
                 -2.24776575e-44,
@@ -380,7 +399,7 @@ def LfuncKallenbachAr100(T):
             ]
         )(T)
 
-    elif T > 40 and T < 100:
+    elif 40 <= T < 100:
         Lz = np.poly1d(
             [
                 1.15288779e-52,
@@ -397,23 +416,22 @@ def LfuncKallenbachAr100(T):
             ]
         )(T)
 
-    elif T > 100:
-        Lz = 0
-    elif T < 1:
+    else:
         Lz = 0
 
-    try:
-        Lz = abs(Lz)
-    except:
-        # print("Curve failed, T = {}".format(T))
-        Lz = 0
-
-    return Lz
+    return np.abs(Lz)
 
 
-def LfuncKallenbachAr150(T):
-    # Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
-    if T >= 1 and T < 5:
+def LfuncKallenbachAr150(T: float) -> float:
+    """Argon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+
+    if 1 <= T < 5:
         Lz = np.poly1d(
             [
                 -8.38699251e-36,
@@ -430,7 +448,7 @@ def LfuncKallenbachAr150(T):
             ]
         )(T)
 
-    elif T > 5 and T < 40:
+    elif 5 <= T < 40:
         Lz = np.poly1d(
             [
                 -2.24776575e-44,
@@ -447,7 +465,7 @@ def LfuncKallenbachAr150(T):
             ]
         )(T)
 
-    elif T > 40 and T < 150:
+    elif 40 <= T < 150:
         Lz = np.poly1d(
             [
                 1.15288779e-52,
@@ -464,23 +482,22 @@ def LfuncKallenbachAr150(T):
             ]
         )(T)
 
-    elif T > 150:
-        Lz = 0
-    elif T < 1:
+    else:
         Lz = 0
 
-    try:
-        Lz = abs(Lz)
-    except:
-        # print("Curve failed, T = {}".format(T))
-        Lz = 0
-
-    return Lz
+    return np.abs(Lz)
 
 
-def LfuncKallenbachNe(T):
-    # Neon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
-    if T >= 1 and T < 5:
+def LfuncKallenbachNe(T: float) -> float:
+    """Neon, Tau = 1ms, Kallenbach 2018, xlsx from David Moulton, units W/m3
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    """
+
+    if 1 <= T < 5:
         Lz = np.poly1d(
             [
                 -7.31349415e-38,
@@ -497,7 +514,7 @@ def LfuncKallenbachNe(T):
             ]
         )(T)
 
-    elif T > 5 and T < 40:
+    elif 5 <= T < 40:
         Lz = np.poly1d(
             [
                 2.29496770e-45,
@@ -514,7 +531,7 @@ def LfuncKallenbachNe(T):
             ]
         )(T)
 
-    elif T > 40 and T < 300:
+    elif 40 <= T < 300:
         Lz = np.poly1d(
             [
                 2.25354957e-53,
@@ -531,25 +548,14 @@ def LfuncKallenbachNe(T):
             ]
         )(T)
 
-    elif T > 300:
-        Lz = 0
-    elif T < 1:
+    else:
         Lz = 0
 
-    try:
-        Lz = abs(Lz)
-    except:
-        # print("Curve failed, T = {}".format(T))
-        Lz = 0
-
-    return Lz
+    return np.abs(Lz)
 
 
-from scipy import interpolate
-
-
-def LfuncKallenbach(species_choice):
-    radiation = dict()
+def LfuncKallenbach(species_choice: str) -> Callable[[float], float]:
+    radiation = {}
 
     # Temperature array
     T = np.array(
@@ -1391,20 +1397,35 @@ def LfuncKallenbach(species_choice):
     T[Tmax_idx] = Tmax  # Make sure this point is exactly Tmax
     radiation[species_choice][Tmax_idx + 1 :] = 0
 
-    Lfunc = interpolate.CubicSpline(T, radiation[species_choice])
-
-    return Lfunc
+    return interpolate.CubicSpline(T, radiation[species_choice])
 
 
-# #Custom gaussian impurity cooling curve if desired
-def LfunLengFunccGauss(T, width=2):
+def LfunLengFunccGauss(T: float, width: float = 2) -> float:
+    """Custom gaussian impurity cooling curve if desired
+
+    Parameters
+    ----------
+    T:
+        Temperature [eV]
+    width:
+        Gaussian width [eV^2]
+    """
     return 1e-31 * np.exp(-((T - 5) ** 2) / (width))
 
 
-# reader for AMJUL files
-def ratesAmjul(file, T, n):
-    rawdata = np.loadtxt(file)
-    unpackedData = []
+def ratesAmjul(filename: PathLike, T: float, n: float) -> float:
+    """Reader for AMJUL files
+
+    Parameters
+    ----------
+    filename:
+        Path to AMJUL file
+    T:
+        Temperature [eV]
+    n:
+        Density (FIXME)
+    """
+    rawdata = np.loadtxt(filename)
     counter = 0
     rates = 0
     for i in range(3):
@@ -1413,20 +1434,29 @@ def ratesAmjul(file, T, n):
                 int(i * len(rawdata) / 3) : int((i + 1) * len(rawdata) / 3)
             ][:, j]
             nei = np.log(n * 1e-14) ** (counter)
-            counter = counter + 1
+            counter += 1
             for ti in range(9):
                 tei = np.log(T) ** (ti)
-                rates = rates + tei * nei * section[ti]
+                rates += tei * nei * section[ti]
 
     rates = np.exp(rates)
 
     return rates * 1e-6
 
 
-# reader for AMJUL CX files
-def ratesAmjulCX(file, T, E):
-    rawdata = np.loadtxt(file)
-    unpackedData = []
+def ratesAmjulCX(filename: PathLike, T: float, E: float) -> float:
+    """Reader for AMJUL CX files
+
+    Parameters
+    ----------
+    filename:
+        Path to AMJUL file
+    T:
+        Temperature [eV]
+    E:
+        Energy (FIXME)
+    """
+    rawdata = np.loadtxt(filename)
     counter = 0
     rates = 0
     for i in range(3):
@@ -1435,11 +1465,9 @@ def ratesAmjulCX(file, T, E):
                 int(i * len(rawdata) / 3) : int((i + 1) * len(rawdata) / 3)
             ][:, j]
             nei = np.log(E) ** (counter)
-            counter = counter + 1
+            counter += 1
             for ti in range(9):
                 tei = np.log(T) ** (ti)
-                rates = rates + tei * nei * section[ti]
+                rates += tei * nei * section[ti]
 
-    rates = np.exp(rates)
-
-    return rates * 1e-6
+    return np.exp(rates) * 1e-6

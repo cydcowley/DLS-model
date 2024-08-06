@@ -8,7 +8,7 @@ from scipy.integrate import cumulative_trapezoid, trapezoid
 from .DLScommonTools import pad_profile
 from .Iterate import iterate
 from .refineGrid import refineGrid
-from .unpackConfigurationsMK import *
+from .typing import FloatArray
 
 
 class SimulationState:
@@ -17,8 +17,8 @@ class SimulationState:
     needed to run the simulation. The state is passed around different functions, which
     allows more of the algorithm to be abstracted away from the main function.
 
-    Parameter list
-    ---------
+    Parameters
+    ----------
     si : SimulationInputs
         Simulation inputs object containing all constant parameters
     log : dict
@@ -91,22 +91,20 @@ class SimulationState:
 
         self.log[self.SparFront] = self.singleLog  # Put in global log
 
-        l = self.singleLog
-
         if self.si.verbosity >= 2:
-            if len(l["error0"]) == 1:  # Print header on first iteration
+            log = self.singleLog
+
+            if len(log["error0"]) == 1:  # Print header on first iteration
                 print(f"\n\n Solving at parallel location {self.SparFront}")
                 print("--------------------------------")
 
             print(
-                "error0: {:.3E}, Tu: {:.2f}, error1: {:.3E}, cvar: {:.3E}, lower_bound: {:.3E}, upper_bound: {:.3E}".format(
-                    l["error0"][-1],
-                    l["Tu"][-1],
-                    l["error1"][-1],
-                    l["cvar"][-1],
-                    l["lower_bound"][-1],
-                    l["upper_bound"][-1],
-                )
+                f"error0: {log['error0'][-1]:.3E}"
+                f"Tu: {log['Tu'][-1]:.3E}"
+                f"error1: {log['error1'][-1]:.3E}"
+                f"cvar: {log['cvar'][-1]:.3E}"
+                f"lower_bound: {log['lower_bound'][-1]:.3E}"
+                f"upper_bound: {log['upper_bound'][-1]:.3E}"
             )
 
     # Update many variables
@@ -127,11 +125,8 @@ class SimulationInputs:
     This class functions the same as SimulationState, but is used to store the inputs instead.
     The separation is to make it easier to see which variables should be unchangeable.
 
-    Parameter list
-    ---------
-
-    Physical parameters
-    ~~~~~~~~~
+    Parameters
+    ----------
     kappa0 : float
         Electron conductivity
     mi : float
@@ -152,11 +147,6 @@ class SimulationInputs:
         Cooling curve function, can be LfuncKallenbachx where x is Ne, Ar or N.
     Lz : list
         Cooling curve data: [0] contains temperatures in [eV] and [1] the corresponding cooling values in [W/m^3]
-    alpha : float
-        Heat flux limiter (WIP do not use)
-
-    Settings
-    ~~~~~~~~~
     control_variable : str, default impurity_frac
         density, impurity_frac or power
     verbosity : int, default 0
@@ -170,10 +160,7 @@ class SimulationInputs:
     timeout : float
         Maximum number of iterations for each loop before warning or error
     radios : dict
-        Contains flags for ionisation (WIP do not use), upstreamGrid (allows full flux tube) and fluxlim (WIP do not use)
-
-    Geometry
-    ~~~~~~~~~
+        Contains flags for ionisation (WIP do not use), upstreamGrid (allows full flux tube)
     SparRange : list
         List of S parallel locations to solve for
     indexRange : list
@@ -192,7 +179,7 @@ class SimulationInputs:
 
     def __init__(self):
         # Physics constants
-        self.kappa0 = 2500  #
+        self.kappa0 = 2500
         self.mi = 3 * 10 ** (-27)
         self.echarge = 1.60 * 10 ** (-19)
 
@@ -205,35 +192,54 @@ class SimulationInputs:
         return str(self.__dict__)
 
 
-def LRBv21(
-    constants,
-    radios,
-    d,
-    SparRange,
-    control_variable="impurity_frac",
-    verbosity=0,
-    Ctol=1e-3,
-    Ttol=1e-2,
-    URF=1,
-    timeout=20,
-    dynamicGrid=False,
-    dynamicGridRefinementRatio=5,
-    dynamicGridRefinementWidth=1,
-    dynamicGridDiagnosticPlot=False,
-    zero_qpllt=False,
-):
-    """function that returns the impurity fraction required for a given temperature at the target. Can request a low temperature at a given position to mimick a detachment front at that position.
-    constants: dict of options
-    radios: dict of options
-    indexRange: array of S indices of the parallel front locations to solve for
-    control_variable: either impurity_frac, density or power
-    Ctol: error tolerance target for the inner loop (i.e. density/impurity/heat flux)
-    Ttol: error tolerance target for the outer loop (i.e. rerrunning until Tu convergence)
-    URF: under-relaxation factor for temperature. If URF is 0.2, Tu_new = Tu_old*0.8 + Tu_calculated*0.2. Always set to 1.
-    Timeout: controls timeout for all three loops within the code. Each has different message on timeout. Default 20
-    dynamicGrid: enables iterative grid refinement around the front (recommended)
-    dynamicGridRefinementRatio: ratio of finest to coarsest cell width in dynamic grid
-    dynamicGridRefinementWidth: size of dynamic grid refinement region in metres parallel
+def run_dls(
+    constants: dict,
+    radios: dict,
+    d: dict,
+    SparRange: FloatArray,
+    control_variable: str = "impurity_frac",
+    verbosity: int = 0,
+    Ctol: float = 1e-3,
+    Ttol: float = 1e-2,
+    URF: float = 1,
+    timeout: int = 20,
+    dynamicGrid: bool = False,
+    dynamicGridRefinementRatio: float = 5,
+    dynamicGridRefinementWidth: float = 1,
+    dynamicGridDiagnosticPlot: bool = False,
+    zero_qpllt: bool = False,
+) -> dict[str, FloatArray]:
+    """Run the DLS-extended model
+
+    Returns the impurity fraction required for a given temperature at
+    the target. Can request a low temperature at a given position to
+    mimic a detachment front at that position.
+
+    Parameters
+    ----------
+    constants:
+        dict of options
+    radios:
+        dict of options
+    indexRange:
+        array of S indices of the parallel front locations to solve for
+    control_variable:
+        either impurity_frac, density or power
+    Ctol:
+        error tolerance target for the inner loop (i.e. density/impurity/heat flux)
+    Ttol:
+        error tolerance target for the outer loop (i.e. rerrunning until Tu convergence)
+    URF:
+        under-relaxation factor for temperature. If URF is 0.2, Tu_new = Tu_old*0.8 + Tu_calculated*0.2. Always set to 1.
+    Timeout:
+        controls timeout for all three loops within the code. Each has different message on timeout. Default 20
+    dynamicGrid:
+        enables iterative grid refinement around the front (recommended)
+    dynamicGridRefinementRatio:
+        ratio of finest to coarsest cell width in dynamic grid
+    dynamicGridRefinementWidth:
+        size of dynamic grid refinement region in metres parallel
+
     """
     # Start timer
     t0 = timer()
@@ -287,7 +293,7 @@ def LRBv21(
     ):  # For each detachment front location:
         st.SparFront = SparFront  # Current prescribed parallel front location
 
-        if dynamicGrid is True:
+        if dynamicGrid:
             newProfile = refineGrid(
                 d,
                 SparFront,
@@ -372,7 +378,7 @@ def LRBv21(
             st.cvar = 1 / qradial_guess
 
         # Initial guess of qpllt, the virtual target temperature (typically 0).
-        if zero_qpllt is True:
+        if zero_qpllt:
             st.qpllt = si.qpllu0 * 1e-2
         else:
             st.qpllt = (
@@ -406,9 +412,9 @@ def LRBv21(
             # Double or halve cvar until the error flips sign
             for k1 in range(si.timeout * 2):
                 if st.error1 > 0:
-                    st.cvar = st.cvar / 2
+                    st.cvar /= 2
                 elif st.error1 < 0:
-                    st.cvar = st.cvar * 2
+                    st.cvar *= 2
 
                 st = iterate(si, st)
 
@@ -446,12 +452,10 @@ def LRBv21(
                 elif st.error1 > 0:
                     st.upper_bound = st.cvar
 
-                # Break on success
-                if k0 < 2:
-                    tolerance = 1e-2  # Looser tolerance for the first two T iterations
-                else:
-                    tolerance = si.Ctol
+                # Looser tolerance for the first two T iterations
+                tolerance = 1e-2 if k0 < 2 else si.Ctol
 
+                # Break on success
                 if abs(st.error1) < tolerance:
                     break
 
@@ -485,7 +489,7 @@ def LRBv21(
             output["cvar"].append(st.cvar)
 
         Qrad = []
-        for i, Tf in enumerate(st.T):
+        for Tf in st.T:
             if si.control_variable == "impurity_frac":
                 Qrad.append(((si.nu0**2 * st.Tu**2) / Tf**2) * st.cvar * si.Lfunc(Tf))
             elif si.control_variable == "density":
@@ -544,8 +548,8 @@ def LRBv21(
             output["spol_onset"] = spol_onset
 
             grad = np.gradient(crel_list)
-            for i, val in enumerate(grad):
-                if i > 0 and np.sign(grad[i]) != np.sign(grad[i - 1]):
+            for i, _val in enumerate(grad):
+                if i > 0 and np.sign(_val) != np.sign(grad[i - 1]):
                     crel_list_trim[:i] = np.nan
                     cvar_list_trim[:i] = np.nan
 
@@ -573,6 +577,6 @@ def LRBv21(
     output = dict(output)
     t1 = timer()
 
-    print("Complete in {:.1f} seconds".format(t1 - t0))
+    print(f"Complete in {t1 - t0:.1f} seconds")
 
     return output
